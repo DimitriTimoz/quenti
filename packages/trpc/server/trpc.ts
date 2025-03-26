@@ -68,8 +68,17 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
 export const createTRPCContext = async (opts: CreateNextContextOptions) => {
   const { req, res } = opts;
 
+  console.log("Creating tRPC Context - Request Headers:", req.headers);
+  console.log("Creating tRPC Context - Cookies:", req.cookies);
+
   // Get the session from the server using the unstable_getServerSession wrapper function
   const session = await getServerAuthSession({ req, res });
+
+  console.log("Creating tRPC Context - Session Result:", {
+    sessionExists: !!session,
+    userExists: !!session?.user,
+    sessionDetails: session,
+  });
 
   return createInnerTRPCContext({
     req: req as AxiomAPIRequest,
@@ -115,10 +124,36 @@ const lastSeenUpdateInterval = 60 * 1000;
 const userMap = new Map<string, number>();
 
 export const enforceBasicAuth = t.middleware(({ ctx, next }) => {
-  if (!ctx.session || !ctx.session.user)
-    throw new TRPCError({ code: "UNAUTHORIZED" });
-  if (ctx.session.user.banned)
-    throw new TRPCError({ code: "UNAUTHORIZED", message: "You are banned." });
+  console.log("enforceBasicAuth middleware - Request Headers:", ctx.req.headers);
+  console.log("enforceBasicAuth middleware - Session:", {
+    sessionExists: !!ctx.session,
+    userExists: !!ctx.session?.user,
+    username: ctx.session?.user?.username,
+    userId: ctx.session?.user?.id,
+    sessionDetails: ctx.session,
+  });
+
+  if (!ctx.session || !ctx.session.user) {
+    console.error("No session or user in enforceBasicAuth", {
+      session: ctx.session,
+      headers: ctx.req.headers,
+      cookies: ctx.req.cookies,
+    });
+    throw new TRPCError({ 
+      code: "UNAUTHORIZED",
+      message: "You must be logged in to access this resource",
+    });
+  }
+
+  if (ctx.session.user.banned) {
+    console.error("User is banned in enforceBasicAuth", {
+      user: ctx.session.user,
+    });
+    throw new TRPCError({ 
+      code: "UNAUTHORIZED", 
+      message: "You are banned." 
+    });
+  }
 
   const userLogger = ctx.req.log.with({
     user: ctx.session.user,
@@ -127,7 +162,6 @@ export const enforceBasicAuth = t.middleware(({ ctx, next }) => {
 
   return next({
     ctx: {
-      // infers the `session` as non-nullable
       session: { ...ctx.session, user: ctx.session.user },
     },
   });
@@ -138,12 +172,37 @@ export const enforceBasicAuth = t.middleware(({ ctx, next }) => {
  * procedure
  */
 export const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
-  if (!ctx.session || !ctx.session.user)
+  console.log("enforceUserIsAuthed middleware - Request Headers:", ctx.req.headers);
+  console.log("enforceUserIsAuthed middleware - Session:", {
+    sessionExists: !!ctx.session,
+    userExists: !!ctx.session?.user,
+    username: ctx.session?.user?.username,
+    userId: ctx.session?.user?.id,
+    sessionDetails: ctx.session,
+  });
+
+  if (!ctx.session || !ctx.session.user) {
+    console.error("No session or user in enforceUserIsAuthed", {
+      session: ctx.session,
+      headers: ctx.req.headers,
+      cookies: ctx.req.cookies,
+    });
     throw new TRPCError({ code: "UNAUTHORIZED" });
-  if (ctx.session.user.banned)
+  }
+
+  if (ctx.session.user.banned) {
+    console.error("User is banned in enforceUserIsAuthed", {
+      user: ctx.session.user,
+    });
     throw new TRPCError({ code: "UNAUTHORIZED", message: "You are banned." });
-  if (!ctx.session.user.username)
+  }
+
+  if (!ctx.session.user.username) {
+    console.error("User has no username in enforceUserIsAuthed", {
+      user: ctx.session.user,
+    });
     throw new TRPCError({ code: "PRECONDITION_FAILED" });
+  }
 
   const userLogger = ctx.req.log.with({
     user: ctx.session.user,
@@ -167,7 +226,6 @@ export const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
 
   return next({
     ctx: {
-      // infers the `session` as non-nullable
       session: { ...ctx.session, user: ctx.session.user },
     },
   });

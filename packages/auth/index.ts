@@ -17,5 +17,16 @@ export const getServerAuthSession = async (ctx: {
   req: GetServerSidePropsContext["req"];
   res: GetServerSidePropsContext["res"];
 }) => {
-  return await getServerSession(ctx.req, ctx.res, authOptions);
+  console.log("getServerAuthSession - Request Headers:", ctx.req.headers);
+  console.log("getServerAuthSession - Cookies:", ctx.req.cookies);
+
+  const session = await getServerSession(ctx.req, ctx.res, authOptions);
+
+  console.log("getServerAuthSession - Session Result:", {
+    sessionExists: !!session,
+    userExists: !!session?.user,
+    sessionDetails: session,
+  });
+
+  return session;
 };
