@@ -14,7 +14,8 @@ const version = pjson.version;
 export const authOptions: NextAuthOptions = {
   // Include user.id on session
   callbacks: {
-    jwt({ token, user }) {
+    jwt: async ({ token, user }) => {
+      // Initial sign in
       if (user) {
         token.id = user.id;
         token.email = user.email;
@@ -26,7 +27,37 @@ export const authOptions: NextAuthOptions = {
         token.completedOnboarding = user.completedOnboarding;
         token.organizationId = user.organizationId;
         token.isOrgEligible = user.isOrgEligible;
+        token.lastUpdated = Date.now();
       }
+      
+      // Revalidate the token every 10 seconds
+      const lastUpdated = token.lastUpdated as number | undefined;
+      const shouldRevalidate = 
+        !lastUpdated || 
+        Date.now() - lastUpdated > 10 * 1000;
+      
+      if (shouldRevalidate && token.id) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: token.id as string }
+          });
+          
+          if (user) {
+            token.username = user.username || "";
+            token.displayName = user.displayName;
+            token.type = user.type;
+            token.banned = !!user.bannedAt;
+            token.flags = user.flags;
+            token.completedOnboarding = user.completedOnboarding;
+            token.organizationId = user.organizationId;
+            token.isOrgEligible = user.isOrgEligible;
+            token.lastUpdated = Date.now();
+          }
+        } catch (error) {
+          console.error("Error revalidating token", error);
+        }
+      }
+      
       return token;
     },
     session({ session, token }) {

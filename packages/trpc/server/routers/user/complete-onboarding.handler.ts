@@ -7,7 +7,7 @@ type CompleteOnboardingOptions = {
 export const completeOnboardingHandler = async ({
   ctx,
 }: CompleteOnboardingOptions) => {
-  await ctx.prisma.user.update({
+  const updatedUser = await ctx.prisma.user.update({
     where: {
       id: ctx.session.user.id,
     },
@@ -15,6 +15,8 @@ export const completeOnboardingHandler = async ({
       completedOnboarding: true,
     },
   });
+
+  return updatedUser;
 };
 
 export default completeOnboardingHandler;

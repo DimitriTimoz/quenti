@@ -21,6 +21,9 @@ export const OnboardingDone = () => {
     onSuccess: async () => {
       void event("onboarding_completed", {});
       await update();
+      
+      // Force reload to ensure session is refreshed
+      window.location.href = callbackUrl || "/home";
     },
     onError: async () => {
       await router.replace({
