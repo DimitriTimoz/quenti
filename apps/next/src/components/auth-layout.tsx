@@ -1,25 +1,18 @@
-import { zodResolver } from "@hookform/resolvers/zod";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import React from "react";
-import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Link } from "@quenti/components";
 import { HeadSeo } from "@quenti/components/head-seo";
-import { WEBSITE_URL } from "@quenti/lib/constants/url";
 
 import {
   Box,
-  Button,
   Center,
   Container,
   Fade,
   Flex,
-  FormControl,
   Heading,
-  Input,
-  Stack,
   Text,
   VStack,
   useColorModeValue,
@@ -38,14 +31,6 @@ export interface AuthLayoutProps {
   onUserExists: (callbackUrl: string) => void;
   autoLoginInProgress?: boolean;
 }
-
-interface EmailFormInputs {
-  email: string;
-}
-
-const schema = z.object({
-  email: z.string().email(),
-});
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({
   mode,

@@ -1,6 +1,5 @@
 import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import type { User } from "@quenti/prisma/client";
 
 import { env } from "@quenti/env/server";
 import { APP_URL } from "@quenti/lib/constants/url";
