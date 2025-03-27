@@ -7,6 +7,8 @@ import { Link } from "@quenti/components";
 import { HeadSeo } from "@quenti/components/head-seo";
 
 import {
+  Alert,
+  AlertIcon,
   Box,
   Center,
   Container,
@@ -16,8 +18,6 @@ import {
   Text,
   VStack,
   useColorModeValue,
-  Alert,
-  AlertIcon,
 } from "@chakra-ui/react";
 
 import { Logo } from "../../../../packages/components/logo";
@@ -137,10 +137,14 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                       <AlertIcon />
                       <VStack align="start" spacing={2}>
                         <Text>
-                          L'authentification par formulaire est désactivée. La connexion se fait automatiquement via le CAS INSA Rouen.
+                          L'authentification par formulaire est désactivée. La
+                          connexion se fait automatiquement via le CAS INSA
+                          Rouen.
                         </Text>
                         <Text fontSize="sm">
-                          Erreur contacter les administrateurs. Contact disponibles sur <Link href="https://insa.lol">insa.lol</Link>
+                          Erreur contacter les administrateurs. Contact
+                          disponibles sur{" "}
+                          <Link href="https://insa.lol">insa.lol</Link>
                         </Text>
                       </VStack>
                     </Alert>
