@@ -1,7 +1,5 @@
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/router";
 import React from "react";
-import { z } from "zod";
 
 import { Link } from "@quenti/components";
 import { HeadSeo } from "@quenti/components/head-seo";
@@ -22,8 +20,6 @@ import {
 
 import { Logo } from "../../../../packages/components/logo";
 import { LazyWrapper } from "../common/lazy-wrapper";
-import { useTelemetry } from "../lib/telemetry";
-import { getSafeRedirectUrl } from "../lib/urls";
 import { Loading } from "./loading";
 
 export interface AuthLayoutProps {
@@ -34,18 +30,9 @@ export interface AuthLayoutProps {
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({
   mode,
-  onUserExists,
   autoLoginInProgress = false,
 }) => {
-  const router = useRouter();
-  const { event } = useTelemetry();
   const { status, data: session } = useSession();
-  const callbackUrl =
-    typeof router.query.callbackUrl == "string"
-      ? router.query.callbackUrl
-      : "/home";
-  const safeCallbackUrl = getSafeRedirectUrl(callbackUrl);
-
   const loading = status === "loading" || session?.user;
 
   const calculateMargin = () => {
@@ -75,7 +62,6 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
     "linear(to-t, gray.1000, blue.300)",
   );
   const gradientOpacity = useColorModeValue("0.3", "0.1");
-  const termsColor = useColorModeValue("gray.400", "gray.600");
 
   // Si l'auto-login est en cours, ne pas afficher le formulaire
   if (autoLoginInProgress) {
@@ -137,8 +123,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                       <AlertIcon />
                       <VStack align="start" spacing={2}>
                         <Text>
-                          L'authentification par formulaire est désactivée. La
-                          connexion se fait automatiquement via le CAS INSA
+                          L&apos;authentification par formulaire est désactivée.
+                          La connexion se fait automatiquement via le CAS INSA
                           Rouen.
                         </Text>
                         <Text fontSize="sm">
