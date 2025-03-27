@@ -1,12 +1,12 @@
 import { type NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+import type { User } from "@quenti/prisma/client";
 
 import { env } from "@quenti/env/server";
 import { APP_URL } from "@quenti/lib/constants/url";
 import { prisma } from "@quenti/prisma";
 
 import pjson from "../../apps/next/package.json";
-import { sendVerificationRequest } from "./magic-link";
 import { CustomPrismaAdapter } from "./prisma-adapter";
 
 const version = pjson.version;
@@ -14,17 +14,32 @@ const version = pjson.version;
 export const authOptions: NextAuthOptions = {
   // Include user.id on session
   callbacks: {
-    session({ session, user }) {
+    jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.username = user.username || "";
+        token.displayName = user.displayName || false;
+        token.type = user.type;
+        token.banned = !!user.bannedAt;
+        token.flags = user.flags;
+        token.completedOnboarding = user.completedOnboarding;
+        token.organizationId = user.organizationId;
+        token.isOrgEligible = user.isOrgEligible;
+      }
+      return token;
+    },
+    session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        session.user.username = user.username || "";
-        session.user.displayName = user.displayName;
-        session.user.type = user.type;
-        session.user.banned = !!user.bannedAt;
-        session.user.flags = user.flags;
-        session.user.completedOnboarding = user.completedOnboarding;
-        session.user.organizationId = user.organizationId;
-        session.user.isOrgEligible = user.isOrgEligible;
+        session.user.id = token.id as string;
+        session.user.username = token.username as string;
+        session.user.displayName = token.displayName as boolean;
+        session.user.type = token.type as any;
+        session.user.banned = token.banned as boolean;
+        session.user.flags = token.flags as number;
+        session.user.completedOnboarding = token.completedOnboarding as boolean;
+        session.user.organizationId = token.organizationId as string | null;
+        session.user.isOrgEligible = token.isOrgEligible as boolean;
 
         session.version = version;
       }
@@ -56,31 +71,58 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/login",
     signOut: "/",
     newUser: "/onboarding",
-    verifyRequest: "/auth/verify",
     error: "/auth/error",
   },
+  // JWT is required when using credentials provider
+  session: {
+    strategy: "jwt",
+  },
   // Configure one or more authentication providers
-  adapter: CustomPrismaAdapter(prisma),
   providers: [
-    GoogleProvider({
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-      allowDangerousEmailAccountLinking: true,
+    CredentialsProvider({
+      name: "Email",
+      credentials: {
+        email: { label: "Email", type: "email" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email) {
+          return null;
+        }
+
+        let user = await prisma.user.findUnique({
+          where: {
+            email: credentials.email
+          }
+        });
+
+        if (!user) {
+          // Create a new user if one doesn't exist
+          const emailPrefix = credentials.email.split('@')[0];
+          
+          // Generate a unique username
+          let uniqueUsername = emailPrefix;
+          let counter = 1;
+          
+          // Check if username exists
+          while (await prisma.user.findUnique({ where: { username: uniqueUsername } })) {
+            uniqueUsername = `${emailPrefix}${counter}`;
+            counter++;
+          }
+          
+          user = await prisma.user.create({
+            data: {
+              email: credentials.email,
+              name: emailPrefix,
+              username: uniqueUsername, 
+              type: "Student", 
+              displayName: true,
+              completedOnboarding: false,
+            }
+          });
+        }
+
+        return user;
+      }
     }),
-    // @ts-expect-error Type '"email"' is not assignable
-    {
-      id: "magic",
-      type: "email",
-      sendVerificationRequest,
-    },
-    /**
-     * ...add more providers here
-     *
-     * Most other providers require a bit more work than the Discord provider.
-     * For example, the GitHub provider requires you to add the
-     * `refresh_token_expires_in` field to the Account model. Refer to the
-     * NextAuth.js docs for the provider you want to use. Example:
-     * @see https://next-auth.js.org/providers/github
-     */
   ],
 };

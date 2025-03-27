@@ -62,6 +62,7 @@ model User {
   name                String?
   username            String?   @unique
   email               String    @unique
+  password            String?
   emailVerified       DateTime?
   image               String?
   type                UserType  @default(Student)

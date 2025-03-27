@@ -7,6 +7,8 @@
     "@quenti/env": "workspace:*",
     "@quenti/lib": "workspace:*",
     "@quenti/prisma": "workspace:*",
+    "@types/bcryptjs": "^3.0.0",
+    "bcryptjs": "^3.0.2",
     "email-providers": "^2.0.1",
     "next": "^14.0.4",
     "next-auth": "^4.24.5"

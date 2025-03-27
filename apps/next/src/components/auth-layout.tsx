@@ -17,20 +17,15 @@ import {
   Fade,
   Flex,
   FormControl,
-  HStack,
   Heading,
   Input,
   Stack,
   Text,
   VStack,
   useColorModeValue,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
-
-import {
-  IconBrandGoogleFilled,
-  IconPinned,
-  IconWand,
-} from "@tabler/icons-react";
 
 import { Logo } from "../../../../packages/components/logo";
 import { LazyWrapper } from "../common/lazy-wrapper";
@@ -64,12 +59,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
       : "/home";
   const safeCallbackUrl = getSafeRedirectUrl(callbackUrl);
 
-  React.useEffect(() => {
-    if (session?.user) onUserExists(safeCallbackUrl);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user]);
-
-  const loading = status == "loading" || session?.user;
+  const loading = status === "loading";
 
   const emailMethods = useForm<EmailFormInputs>({
     resolver: zodResolver(schema),
@@ -102,17 +92,25 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
   }, []);
 
   const [margin, setMargin] = React.useState(0);
-  const [expanded, setExpanded] = React.useState(false);
-  const [animationFinished, setAnimationFinished] = React.useState(false);
-  const [magicLinkLoading, setMagicLinkLoading] = React.useState(false);
-
-  const emailInputRef = React.useRef<HTMLInputElement>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const onSubmit: SubmitHandler<EmailFormInputs> = async (data) => {
-    setMagicLinkLoading(true);
-    await signIn("magic", {
+    setIsLoading(true);
+    setError(null);
+    
+    const result = await signIn("credentials", {
       email: data.email,
+      redirect: false,
     });
+
+    if (result?.error) {
+      setError("Invalid email address");
+      setIsLoading(false);
+    } else if (result?.ok) {
+      // Direct redirection without waiting for session
+      window.location.href = safeCallbackUrl;
+    }
   };
 
   const verb = mode == "signup" ? "up" : "in";
@@ -181,128 +179,47 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                       onSubmit={emailMethods.handleSubmit(onSubmit)}
                     >
                       <Stack spacing="3" w="full">
+                        {error && (
+                          <Alert status="error" size="sm" rounded="md">
+                            <AlertIcon />
+                            {error}
+                          </Alert>
+                        )}
+                        <Controller
+                          name="email"
+                          control={emailMethods.control}
+                          render={({ field }) => (
+                            <FormControl isInvalid={!!errors.email}>
+                              <Input
+                                {...field}
+                                mt="2"
+                                minH="40px"
+                                placeholder="Enter your email address"
+                                fontSize="sm"
+                                borderColor="gray.300"
+                                _dark={{
+                                  borderColor: "gray.600",
+                                }}
+                              />
+                              {errors.email && (
+                                <Text color="red.500" fontSize="sm" mt={1}>
+                                  {errors.email.message}
+                                </Text>
+                              )}
+                            </FormControl>
+                          )}
+                        />
                         <Button
+                          w="full"
                           size="lg"
                           fontSize="sm"
-                          shadow="0 4px 6px -1px rgba(0, 0, 0, 0.04),0 2px 4px -1px rgba(0, 0, 0, 0.01)"
-                          leftIcon={<IconBrandGoogleFilled size={18} />}
-                          onClick={async () => {
-                            if (mode == "signup") {
-                              await event("signup", {});
-                            } else {
-                              await event("login", {});
-                            }
-
-                            await signIn("google", {
-                              callbackUrl: safeCallbackUrl,
-                              redirect: false,
-                            });
-                          }}
+                          type="submit"
+                          isLoading={isLoading}
                         >
-                          Sign {verb} with Google
+                          Sign {verb} with email
                         </Button>
-                        <Box>
-                          <Stack
-                            my={expanded ? 4 : 0}
-                            mb={expanded ? 3 : 0}
-                            h={expanded ? "74px" : "0px"}
-                            overflow="hidden"
-                            px="1"
-                            w="calc(100% + 8px)"
-                            ml="-1"
-                            transition="all 0.15s ease-in-out"
-                          >
-                            <Box
-                              top="0"
-                              w="full"
-                              minH="2px"
-                              bg="gray.100"
-                              _dark={{
-                                bg: "gray.750",
-                              }}
-                              rounded="full"
-                              mb="3"
-                            />
-                            <Controller
-                              name="email"
-                              control={emailMethods.control}
-                              render={({ field: { value, onChange } }) => (
-                                <FormControl isInvalid={!!errors.email}>
-                                  <Input
-                                    ref={emailInputRef}
-                                    value={value}
-                                    onChange={onChange}
-                                    mt="2"
-                                    minH="40px"
-                                    placeholder="Enter your email address"
-                                    fontSize="sm"
-                                    borderColor="gray.300"
-                                    _dark={{
-                                      borderColor: "gray.600",
-                                    }}
-                                  />
-                                </FormControl>
-                              )}
-                            ></Controller>
-                          </Stack>
-                          <Button
-                            w="full"
-                            size="lg"
-                            fontSize="sm"
-                            variant="outline"
-                            shadow="0 4px 6px -1px rgba(0, 0, 0, 0.04),0 2px 4px -1px rgba(0, 0, 0, 0.01)"
-                            colorScheme="gray"
-                            onClick={() => {
-                              if (!expanded) {
-                                setExpanded(true);
-                                setTimeout(() => {
-                                  setAnimationFinished(true);
-                                  emailInputRef.current?.focus();
-                                }, 200);
-                              }
-                            }}
-                            type={animationFinished ? "submit" : undefined}
-                            overflow="hidden"
-                            isLoading={magicLinkLoading}
-                          >
-                            <Stack
-                              h="48px"
-                              transform={
-                                expanded
-                                  ? "translateY(0px)"
-                                  : "translateY(-48px)"
-                              }
-                              transition="all 0.5s cubic-bezier(0.25, 1, 0.5, 1)"
-                              spacing="0"
-                            >
-                              <Center minH="48px">
-                                <HStack>
-                                  <IconWand size={16} />
-                                  <Text>Send me a magic link</Text>
-                                </HStack>
-                              </Center>
-                              <Center minH="48px">
-                                <Text>Sign {verb} with email</Text>
-                              </Center>
-                            </Stack>
-                          </Button>
-                        </Box>
                       </Stack>
                     </form>
-                    <Flex gap="6px" ml="-2px">
-                      <Box mt="2px">
-                        <IconPinned size={18} />
-                      </Box>
-                      <Stack spacing="1">
-                        <Text fontWeight={700} fontSize="sm">
-                          If Google has blocked your school&apos;s access
-                        </Text>
-                        <Text fontSize="sm" color="gray.500">
-                          No worries, sign {verb} with email instead, and
-                          we&apos;ll send you a link to instantly log in.
-                        </Text>
-                      </Stack>
-                    </Flex>
                     {mode == "signup" && (
                       <Text
                         textAlign="center"
