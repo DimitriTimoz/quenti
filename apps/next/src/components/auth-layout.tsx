@@ -36,6 +36,7 @@ import { Loading } from "./loading";
 export interface AuthLayoutProps {
   mode: "login" | "signup";
   onUserExists: (callbackUrl: string) => void;
+  autoLoginInProgress?: boolean;
 }
 
 interface EmailFormInputs {
@@ -49,6 +50,7 @@ const schema = z.object({
 export const AuthLayout: React.FC<AuthLayoutProps> = ({
   mode,
   onUserExists,
+  autoLoginInProgress = false,
 }) => {
   const router = useRouter();
   const { event } = useTelemetry();
@@ -59,17 +61,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
       : "/home";
   const safeCallbackUrl = getSafeRedirectUrl(callbackUrl);
 
-  const loading = status === "loading";
-
-  const emailMethods = useForm<EmailFormInputs>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      email: "",
-    },
-  });
-  const {
-    formState: { errors },
-  } = emailMethods;
+  const loading = status === "loading" || session?.user;
 
   const calculateMargin = () => {
     const vh = window.innerHeight;
@@ -92,34 +84,18 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
   }, []);
 
   const [margin, setMargin] = React.useState(0);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
 
-  const onSubmit: SubmitHandler<EmailFormInputs> = async (data) => {
-    setIsLoading(true);
-    setError(null);
-    
-    const result = await signIn("credentials", {
-      email: data.email,
-      redirect: false,
-    });
-
-    if (result?.error) {
-      setError("Invalid email address");
-      setIsLoading(false);
-    } else if (result?.ok) {
-      // Direct redirection without waiting for session
-      window.location.href = safeCallbackUrl;
-    }
-  };
-
-  const verb = mode == "signup" ? "up" : "in";
   const gradient = useColorModeValue(
     "linear(to-t, gray.50, blue.300)",
     "linear(to-t, gray.1000, blue.300)",
   );
   const gradientOpacity = useColorModeValue("0.3", "0.1");
   const termsColor = useColorModeValue("gray.400", "gray.600");
+
+  // Si l'auto-login est en cours, ne pas afficher le formulaire
+  if (autoLoginInProgress) {
+    return null;
+  }
 
   return (
     <>
@@ -170,85 +146,19 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
                     <Heading fontSize="24px" textAlign="center">
                       {mode == "signup"
                         ? "Create your Quenti account"
-                        : "Welcome back"}
+                        : "Login to Quenti"}
                     </Heading>
-                    <form
-                      style={{
-                        width: "100%",
-                      }}
-                      onSubmit={emailMethods.handleSubmit(onSubmit)}
-                    >
-                      <Stack spacing="3" w="full">
-                        {error && (
-                          <Alert status="error" size="sm" rounded="md">
-                            <AlertIcon />
-                            {error}
-                          </Alert>
-                        )}
-                        <Controller
-                          name="email"
-                          control={emailMethods.control}
-                          render={({ field }) => (
-                            <FormControl isInvalid={!!errors.email}>
-                              <Input
-                                {...field}
-                                mt="2"
-                                minH="40px"
-                                placeholder="Enter your email address"
-                                fontSize="sm"
-                                borderColor="gray.300"
-                                _dark={{
-                                  borderColor: "gray.600",
-                                }}
-                              />
-                              {errors.email && (
-                                <Text color="red.500" fontSize="sm" mt={1}>
-                                  {errors.email.message}
-                                </Text>
-                              )}
-                            </FormControl>
-                          )}
-                        />
-                        <Button
-                          w="full"
-                          size="lg"
-                          fontSize="sm"
-                          type="submit"
-                          isLoading={isLoading}
-                        >
-                          Sign {verb} with email
-                        </Button>
-                      </Stack>
-                    </form>
-                    {mode == "signup" && (
-                      <Text
-                        textAlign="center"
-                        fontSize="xs"
-                        color={termsColor}
-                        maxW="260px"
-                        mt="-4"
-                      >
-                        By signing up, you agree to the{" "}
-                        <Link
-                          href={`${WEBSITE_URL}/terms`}
-                          _hover={{
-                            textDecoration: "underline",
-                          }}
-                        >
-                          Privacy Policy
-                        </Link>{" "}
-                        and{" "}
-                        <Link
-                          href={`${WEBSITE_URL}/privacy`}
-                          _hover={{
-                            textDecoration: "underline",
-                          }}
-                        >
-                          Terms of Service
-                        </Link>
-                        .
-                      </Text>
-                    )}
+                    <Alert status="info" rounded="md">
+                      <AlertIcon />
+                      <VStack align="start" spacing={2}>
+                        <Text>
+                          L'authentification par formulaire est désactivée. La connexion se fait automatiquement via le CAS INSA Rouen.
+                        </Text>
+                        <Text fontSize="sm">
+                          Erreur contacter les administrateurs. Contact disponibles sur <Link href="https://insa.lol">insa.lol</Link>
+                        </Text>
+                      </VStack>
+                    </Alert>
                   </VStack>
                 </Fade>
               </Container>

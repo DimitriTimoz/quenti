@@ -7,7 +7,6 @@ import { APP_URL } from "@quenti/lib/constants/url";
 import { prisma } from "@quenti/prisma";
 
 import pjson from "../../apps/next/package.json";
-import { CustomPrismaAdapter } from "./prisma-adapter";
 
 const version = pjson.version;
 
@@ -113,42 +112,62 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "Email",
       credentials: {
+        // Nous laissons le champ email, mais il ne sera pas utilisé
         email: { label: "Email", type: "email" }
       },
-      async authorize(credentials) {
-        if (!credentials?.email) {
+      async authorize(credentials, req) {
+        // N'accepter que les emails provenant des headers HTTP
+        const headerEmail = req.headers?.["x-insa-auth-email"] as string | undefined;
+        
+        // Rejeter toute tentative d'authentification sans le header
+        if (!headerEmail) {
           return null;
         }
 
+        // Get the username from the x-insa-auth-uid header
+        const insaAuthUid = req.headers?.["x-insa-auth-uid"] as string | undefined;
+        
         let user = await prisma.user.findUnique({
           where: {
-            email: credentials.email
+            email: headerEmail
           }
         });
 
         if (!user) {
           // Create a new user if one doesn't exist
-          const emailPrefix = credentials.email.split('@')[0];
+          // Use insaAuthUid as username if available, otherwise use email prefix
+          let username = insaAuthUid || headerEmail.split('@')[0];
           
-          // Generate a unique username
-          let uniqueUsername = emailPrefix;
-          let counter = 1;
-          
-          // Check if username exists
-          while (await prisma.user.findUnique({ where: { username: uniqueUsername } })) {
-            uniqueUsername = `${emailPrefix}${counter}`;
-            counter++;
+          // Ensure username is unique if insaAuthUid is not provided
+          if (!insaAuthUid) {
+            let uniqueUsername = username;
+            let counter = 1;
+            
+            // Check if username exists
+            while (await prisma.user.findUnique({ where: { username: uniqueUsername } })) {
+              uniqueUsername = `${username}${counter}`;
+              counter++;
+            }
+            
+            username = uniqueUsername;
           }
           
           user = await prisma.user.create({
             data: {
-              email: credentials.email,
-              name: emailPrefix,
-              username: uniqueUsername, 
+              email: headerEmail,
+              name: username,
+              username: username,
               type: "Student", 
               displayName: true,
-              completedOnboarding: false,
+              // Skip onboarding by setting completedOnboarding to true
+              completedOnboarding: true,
             }
+          });
+        } else if (!user.completedOnboarding) {
+          // If user exists but hasn't completed onboarding, update them
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { completedOnboarding: true }
           });
         }
 

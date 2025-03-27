@@ -1,10 +1,7 @@
-import { PageWrapper } from "../../common/page-wrapper";
-import { OnboardingDone } from "../../modules/onboarding/onboarding-done";
+import { RedirectFromOnboarding } from "../../modules/onboarding/redirect-from-onboarding";
 
 const Page = () => {
-  return <OnboardingDone />;
+  return <RedirectFromOnboarding />;
 };
-
-Page.PageWrapper = PageWrapper;
 
 export default Page;
