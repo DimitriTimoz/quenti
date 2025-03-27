@@ -5,7 +5,7 @@ import React from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { Link, Logo } from "@quenti/components";
+import { Link } from "@quenti/components";
 import { HeadSeo } from "@quenti/components/head-seo";
 import { WEBSITE_URL } from "@quenti/lib/constants/url";
 
@@ -32,6 +32,7 @@ import {
   IconWand,
 } from "@tabler/icons-react";
 
+import { Logo } from "../../../../packages/components/logo";
 import { LazyWrapper } from "../common/lazy-wrapper";
 import { useTelemetry } from "../lib/telemetry";
 import { getSafeRedirectUrl } from "../lib/urls";

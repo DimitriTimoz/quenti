@@ -1,56 +1,34 @@
 import { type NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { jwtVerify } from "jose";
-import { type JWT } from "next-auth/jwt";
-import jsonwebtoken from "jsonwebtoken";
-import { SignJWT } from "jose";
+import GoogleProvider from "next-auth/providers/google";
 
 import { env } from "@quenti/env/server";
 import { APP_URL } from "@quenti/lib/constants/url";
 import { prisma } from "@quenti/prisma";
-import { type UserType } from "@prisma/client";
 
 import pjson from "../../apps/next/package.json";
+import { sendVerificationRequest } from "./magic-link";
 import { CustomPrismaAdapter } from "./prisma-adapter";
 
 const version = pjson.version;
 
-interface ExtendedToken extends JWT {
-  user?: {
-    id: string;
-    name: string | null;
-    username: string;
-    type: UserType;
-    displayName: boolean;
-    banned: boolean;
-    flags: number;
-    completedOnboarding: boolean;
-    organizationId: string | null;
-    isOrgEligible: boolean;
-  };
-  version?: string;
-  sessionToken?: string;
-}
-
 export const authOptions: NextAuthOptions = {
   // Include user.id on session
   callbacks: {
-    async session({ session, token }) {
-      console.log("NextAuth session callback:", { session, token });
-      const extendedToken = token as ExtendedToken;
-      if (extendedToken.user) {
-        session.user = extendedToken.user;
-        session.version = extendedToken.version || version;
+    session({ session, user }) {
+      if (session.user) {
+        session.user.id = user.id;
+        session.user.username = user.username || "";
+        session.user.displayName = user.displayName;
+        session.user.type = user.type;
+        session.user.banned = !!user.bannedAt;
+        session.user.flags = user.flags;
+        session.user.completedOnboarding = user.completedOnboarding;
+        session.user.organizationId = user.organizationId;
+        session.user.isOrgEligible = user.isOrgEligible;
+
+        session.version = version;
       }
       return session;
-    },
-    async jwt({ token, user }) {
-      console.log("NextAuth jwt callback:", { token, user });
-      if (user) {
-        token.user = user;
-        token.version = version;
-      }
-      return token;
     },
     redirect({ url, baseUrl }) {
       // Allows relative callback URLs
@@ -60,7 +38,6 @@ export const authOptions: NextAuthOptions = {
       return baseUrl;
     },
     async signIn({ user }) {
-      console.log("NextAuth signIn callback:", { user });
       if (env.ENABLE_EMAIL_WHITELIST === "true") {
         if (
           !(await prisma.whitelistedEmail.findUnique({
@@ -71,6 +48,7 @@ export const authOptions: NextAuthOptions = {
         )
           return "/unauthorized";
       }
+
       return true;
     },
   },
@@ -78,96 +56,31 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/login",
     signOut: "/",
     newUser: "/onboarding",
+    verifyRequest: "/auth/verify",
     error: "/auth/error",
   },
   // Configure one or more authentication providers
   adapter: CustomPrismaAdapter(prisma),
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
-  },
-  jwt: {
-    secret: env.NEXTAUTH_SECRET,
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    encode: async ({ secret, token }) => {
-      if (!token) return "";
-      const encodedToken = await new SignJWT(token as any)
-        .setProtectedHeader({ alg: "HS256" })
-        .setIssuedAt()
-        .setExpirationTime("30d")
-        .sign(new TextEncoder().encode(secret));
-      return encodedToken;
-    },
-    decode: async ({ secret, token }) => {
-      if (!token) return null;
-      try {
-        const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
-        return payload as JWT;
-      } catch (error) {
-        console.error("JWT decode error:", error);
-        return null;
-      }
-    },
-  },
   providers: [
-    CredentialsProvider({
-      id: "credentials",
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "text" }
-      },
-      async authorize(credentials) {
-        const email = credentials?.email;
-        if (!email) {
-          throw new Error("Missing email");
-        }
-
-        try {
-          const uniqueId = Date.now().toString().slice(-6);
-          const baseUsername = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-          const username = `${baseUsername}${uniqueId}`;
-          
-          const user = await prisma.user.upsert({
-            where: { email },
-            update: {
-              username,
-              completedOnboarding: true,
-            },
-            create: {
-              email,
-              name: email.split("@")[0],
-              username,
-              emailVerified: new Date(),
-              completedOnboarding: true,
-            },
-          });
-
-          if (!user) {
-            throw new Error("Failed to create or update user");
-          }
-
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            image: null,
-            displayName: user.displayName,
-            username: user.username,
-            type: user.type,
-            banned: !!user.bannedAt,
-            bannedAt: user.bannedAt,
-            flags: user.flags,
-            completedOnboarding: user.completedOnboarding,
-            organizationId: user.organizationId,
-            isOrgEligible: user.isOrgEligible,
-          };
-        } catch (error) {
-          console.error('Error in authorize:', error);
-          throw new Error("Failed to authenticate user");
-        }
-      }
+    GoogleProvider({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      allowDangerousEmailAccountLinking: true,
     }),
+    // @ts-expect-error Type '"email"' is not assignable
+    {
+      id: "magic",
+      type: "email",
+      sendVerificationRequest,
+    },
+    /**
+     * ...add more providers here
+     *
+     * Most other providers require a bit more work than the Discord provider.
+     * For example, the GitHub provider requires you to add the
+     * `refresh_token_expires_in` field to the Account model. Refer to the
+     * NextAuth.js docs for the provider you want to use. Example:
+     * @see https://next-auth.js.org/providers/github
+     */
   ],
-  debug: process.env.NODE_ENV === "development",
 };

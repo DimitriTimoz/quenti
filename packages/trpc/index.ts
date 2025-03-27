@@ -46,42 +46,19 @@ export const api = createTRPCNext<AppRouter>({
             process.env.NODE_ENV === "development" ||
             (opts.direction === "down" && opts.result instanceof Error),
         }),
-        httpLink({
-          url: `${getBaseUrl()}/api/trpc`,
-          headers() {
-            const headers: Record<string, string> = {
-              'Content-Type': 'application/json',
-            };
-            
-            // Include cookies
-            if (typeof window !== 'undefined') {
-              const cookies = document.cookie;
-              headers['cookie'] = cookies;
-
-              // Log cookies for debugging
-              console.log('tRPC request cookies:', {
-                cookies,
-                sessionToken: cookies.includes('next-auth.session-token'),
-                emailCookie: cookies.includes('x-insa-auth-email'),
-              });
-            }
-            
-            return headers;
+        splitLink({
+          condition(op) {
+            // check for context property `skipBatch`
+            return op.context.skipBatch === true;
           },
-          fetch(url, options) {
-            // Log request details for debugging
-            console.log('tRPC request details:', {
-              url,
-              method: options?.method,
-              headers: options?.headers,
-              body: options?.body,
-            });
-
-            return fetch(url, {
-              ...options,
-              credentials: 'include',
-            });
-          },
+          // when condition is true, use normal request
+          true: httpLink({
+            url: `${getBaseUrl()}/api/trpc`,
+          }),
+          // when condition is false, use batching
+          false: httpBatchLink({
+            url: `${getBaseUrl()}/api/trpc`,
+          }),
         }),
       ],
       queryClientConfig: {
@@ -92,17 +69,6 @@ export const api = createTRPCNext<AppRouter>({
                 TRPCClientErrorLike<AppRouter>
               >;
               const code = err?.data?.code;
-              
-              // Log error for debugging
-              if (err) {
-                console.error('tRPC Query Error:', {
-                  code,
-                  error: err,
-                  data: err.data,
-                  message: err.message,
-                  shape: err.shape,
-                });
-              }
 
               if (
                 (
